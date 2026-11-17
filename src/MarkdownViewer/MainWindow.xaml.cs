@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -454,8 +455,11 @@ public partial class MainWindow : Window
         };
         menu.Items.Add(folder);
         menu.Items.Add(new Separator());
+        var assembly = typeof(MainWindow).Assembly;
+        var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
+            ?? assembly.GetName().Version?.ToString();
         var about = new MenuItem { Header = "About" };
-        about.Click += (_, _) => MessageBox.Show(this, "Markdown Viewer 1.0\n\nC# · WPF · Markdig\nA viewer for local Markdown files.\n\nCtrl+O — open files\nCtrl+F — show/hide search\nCtrl+Tab — next tab\nCtrl+W — close tab\nCtrl+Q — quit\nEsc — close search, then quit\nCtrl+mouse wheel — zoom\nCtrl+Shift+O — toggle outline\nUp / Down — scroll by line\nPage Up / Page Down — scroll by page\nSpace — scroll down one page\nF5 — refresh\n\nSettings: " + _store.FilePath, "About", MessageBoxButton.OK, MessageBoxImage.Information);
+        about.Click += (_, _) => MessageBox.Show(this, $"Markdown Viewer {version}\n\nC# · WPF · Markdig\nA viewer for local Markdown files.\n\nCtrl+O — open files\nCtrl+F — show/hide search\nCtrl+Tab — next tab\nCtrl+W — close tab\nCtrl+Q — quit\nEsc — close search, then quit\nCtrl+mouse wheel — zoom\nCtrl+Shift+O — toggle outline\nUp / Down — scroll by line\nPage Up / Page Down — scroll by page\nSpace — scroll down one page\nF5 — refresh\n\nSettings: " + _store.FilePath, "About", MessageBoxButton.OK, MessageBoxImage.Information);
         menu.Items.Add(about);
         ShowMenu(menu, (Button)sender);
     }

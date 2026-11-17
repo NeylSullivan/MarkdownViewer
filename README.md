@@ -14,7 +14,7 @@ A Windows app for reading local Markdown files, built with C#, WPF and Markdig. 
 
 ## Run
 
-To run a published build, install **Microsoft .NET Desktop Runtime 10 (x64)**, extract the ZIP and run `MarkdownViewer.exe`. Keep the extracted files together: the runtime is not bundled. To create the ZIP from source, see [Build and publish](#build-and-publish).
+Download a ZIP from [GitHub Releases](https://github.com/NeylSullivan/MarkdownViewer/releases). To run a published build, install **Microsoft .NET Desktop Runtime 10 (x64)**, extract the ZIP and run `MarkdownViewer.exe`. Keep the extracted files together: the runtime is not bundled. To create the ZIP from source, see [Build and publish](#build-and-publish).
 
 Open files with **Ctrl+O**, drag them into the window or pass paths on the command line:
 
@@ -93,7 +93,35 @@ Run from the repository root in PowerShell:
 
 - `MarkdownViewer-win-x64-framework-dependent/`
 - `MarkdownViewer-win-x64-framework-dependent.zip`
+- `MarkdownViewer-win-x64-framework-dependent.zip.sha256`
 
 The published build targets Windows x64 and requires the separately installed runtime. Build output is ignored by Git.
+
+Pass `-Version 1.2.3` to both scripts to test and package a specific release version. The ZIP and checksum then include the version in their names, for example `MarkdownViewer-1.2.3-win-x64-framework-dependent.zip`. The application version and About dialog use the supplied version; no project-file version edit is required for a release.
+
+## GitHub releases
+
+The [Release workflow](.github/workflows/release.yml) runs when a tag starting with `v` is pushed. Commit and push the workflow and source changes before tagging the commit to release:
+
+```powershell
+git push origin main
+git tag -a v1.2.3 -m "Release 1.2.3"
+git push origin v1.2.3
+```
+
+Use a new tag for each release. Tags must follow `vMAJOR.MINOR.PATCH`, optionally followed by a prerelease suffix such as `v1.2.3-rc.1`. Leading zeroes in numeric identifiers and build metadata (`+...`) are not supported. Prerelease tags create GitHub prereleases and do not replace the latest stable release.
+
+The workflow installs a stable .NET 10 SDK on Windows, builds the tagged source, runs all smoke tests, and packages the application. Only after these succeed does a separate job create release notes, attach the versioned ZIP and its SHA-256 checksum, and publish the release. Screenshots are available in the workflow's `smoke-test-screenshots` artifact for seven days.
+
+GitHub Actions must be enabled for the repository. Publication uses the built-in `GITHUB_TOKEN` with `contents: write` granted only to the publishing job; no personal access token or additional repository secrets are needed. Repository or organization policies must allow the actions and that permission.
+
+If a run fails, fix the cause and use **Actions → Release → Re-run failed jobs** for a transient failure, or push a new version tag for source changes. A partially uploaded draft is completed on retry. An already published release is left unchanged. Do not move a published tag to another commit.
+
+To verify a downloaded ZIP in PowerShell, compare the hash with its accompanying `.sha256` file:
+
+```powershell
+(Get-FileHash .\MarkdownViewer-1.2.3-win-x64-framework-dependent.zip -Algorithm SHA256).Hash
+Get-Content .\MarkdownViewer-1.2.3-win-x64-framework-dependent.zip.sha256
+```
 
 Third-party notices and licenses are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
