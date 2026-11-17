@@ -1,0 +1,23 @@
+**/bin/
+**/obj/
+.tools/
+.nuget/
+.test-data/
+artifacts/
+*.user
+*.suo
+.vs/
+.idea/
+.vscode/
+
+# Local settings and credentials
+.env
+.env.*
+!.env.example
+settings.json
+settings.*.tmp
+*.log
+*.pem
+*.key
+*.pfx
+*.p12
