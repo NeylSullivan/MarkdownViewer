@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -8,6 +9,48 @@ using MarkdownViewer.Services;
 
 internal static partial class Program
 {
+    private static async Task TestDocumentStatus()
+    {
+        new SettingsStore().Save(new AppSettings());
+        var markdown = Fixture("status.md");
+        var empty = Fixture("status-empty.md");
+        await File.WriteAllTextAsync(markdown, "# Hello", Encoding.Unicode);
+        await File.WriteAllTextAsync(empty, "");
+        var window = await PrepareWindow();
+        try
+        {
+            var tokens = (TextBlock)window.FindName("TokenCountText");
+            var status = (TextBlock)window.FindName("StatusText");
+            Equal("", tokens.Text, "No token count before a document is opened");
+            await window.OpenFilesAsync([markdown]);
+            await WaitUntil(() => tokens.Text == "2 tokens", "Markdown heading marker counts while the UTF-16 BOM is excluded");
+            await window.OpenFilesAsync([empty]);
+            await WaitUntil(() => tokens.Text == "0 tokens", "Empty file has a zero count");
+
+            const string updated = "お誕生日おめでとう";
+            await File.WriteAllTextAsync(markdown, updated);
+            await WaitUntil(() => window.Tabs[0].Text == updated, "Background tab receives the external edit", 5000);
+            Equal("0 tokens", tokens.Text, "Background reload preserves the selected file's count");
+            Equal(empty, status.Text, "Background reload preserves the selected file's status");
+
+            var tabs = (ListBox)window.FindName("TabsList");
+            tabs.SelectedIndex = 0;
+            Assert(status.Text.StartsWith("Updated externally at ", StringComparison.Ordinal), "Returning to an externally updated file shows the update time");
+            await WaitUntil(() => tokens.Text == "8 tokens", "Updated text is counted with the o200k_base vocabulary");
+            Assert(Shortcut(window, Key.F5, ModifierKeys.None, window), "F5 triggers a manual refresh");
+            await WaitUntil(() => status.Text.StartsWith("Refreshed at ", StringComparison.Ordinal), "Manual refresh is reported separately from external changes");
+
+            await File.WriteAllTextAsync(markdown, "hello");
+            await WaitUntil(() => tokens.Text == "1 token", "Visible file's count changes after an external edit", 5000);
+            Assert(status.Text.StartsWith("Updated externally at ", StringComparison.Ordinal), "Active tab reports the new external update");
+            Invoke(window, "CloseTab", window.Tabs[0]);
+            await WaitUntil(() => tokens.Text == "0 tokens", "Closing an active tab restores the other tab's count");
+            Invoke(window, "CloseTab", window.Tabs[0]);
+            Equal("", tokens.Text, "Closing the last tab clears the token count");
+        }
+        finally { window.Close(); }
+    }
+
     private static async Task TestInvalidDocuments()
     {
         var binary = Fixture("invalid-binary.md");

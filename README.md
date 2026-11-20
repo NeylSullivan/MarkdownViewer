@@ -10,7 +10,9 @@ A Windows app for reading local Markdown files, built with C#, WPF and Markdig. 
 - Case-insensitive search with match highlighting and next/previous navigation.
 - Light, dark and system themes; adjustable text size, reading width and outline width.
 - Drag to reorder tabs; restore tab order, the active document and reading positions on launch.
-- Automatic reload when files change in an external editor.
+- The status bar shows the scroll position and token count for the active file. A document that fits in the window shows 100%.
+- Tokens are counted locally from the full Markdown source, including markup and code, using the bundled `o200k_base` tokenizer. Other tokenizers can give different counts.
+- Automatic reload when files change in an external editor. The status bar briefly shows the local time of the external update or manual refresh.
 
 ## Run
 

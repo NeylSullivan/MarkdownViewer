@@ -61,6 +61,8 @@ internal static partial class Program
             await Check("Files: UTF-16 decoding", TestEncoding);
             await Check("Single instance: separate process forwards files", TestSingleInstance);
             await Check("Window: resources, tabs, duplicate files, reload and hidden outline", TestWindow);
+            await Check("Status bar: token counts and external updates follow the active file", TestDocumentStatus);
+            await Check("Status bar: scroll percentage follows the current document", TestScrollPercentage);
             await Check("Window: application labels are English", TestEnglishInterface);
             await Check("Keyboard: reader scrolling and search field editing", TestReaderKeyboard);
             await Check("Session: tab order, active document and per-file positions survive restart", TestSessionRoundTrip);

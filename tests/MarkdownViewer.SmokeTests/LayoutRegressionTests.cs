@@ -7,6 +7,48 @@ using MarkdownViewer.Services;
 
 internal static partial class Program
 {
+    private static async Task TestScrollPercentage()
+    {
+        var longPath = Fixture("scroll-progress-long.md");
+        var shortPath = Fixture("scroll-progress-short.md");
+        await File.WriteAllTextAsync(longPath, string.Join("\n\n", Enumerable.Range(1, 50).Select(i => $"Paragraph {i}.")));
+        await File.WriteAllTextAsync(shortPath, "One paragraph.");
+        var window = await PrepareWindow();
+        try
+        {
+            var progress = (TextBlock)window.FindName("ScrollProgressText");
+            var reader = (RichTextBox)window.FindName("Reader");
+            var tabs = (ListBox)window.FindName("TabsList");
+            Equal(string.Empty, progress.Text, "No percentage appears without an open document");
+
+            await window.OpenFilesAsync([longPath]);
+            await LayoutWindow(window);
+            Equal("0%", progress.Text, "A long document opens at the top");
+            reader.ScrollToVerticalOffset((reader.ExtentHeight - reader.ViewportHeight) / 2);
+            await LayoutWindow(window);
+            Equal("50%", progress.Text, "The midpoint is half of the scrollable height");
+            await LayoutWindow(window, height: 480);
+            var resizedPercent = 100 * reader.VerticalOffset / (reader.ExtentHeight - reader.ViewportHeight);
+            Assert(resizedPercent < 49, "Resizing changes the scrollable range");
+            Equal($"{resizedPercent:0}%", progress.Text, "Resizing refreshes the percentage without scrolling");
+
+            await LayoutWindow(window);
+            await window.OpenFilesAsync([shortPath]);
+            await LayoutWindow(window);
+            Equal("100%", progress.Text, "A whole document that fits is fully visible");
+            tabs.SelectedIndex = 0;
+            await LayoutWindow(window);
+            Equal("50%", progress.Text, "Switching back restores the earlier percentage");
+            reader.ScrollToEnd();
+            await LayoutWindow(window);
+            Equal("100%", progress.Text, "The last scroll position is 100 percent");
+            while (window.Tabs.Count > 0) Invoke(window, "CloseTab", window.Tabs[0]);
+            await LayoutWindow(window);
+            Equal(string.Empty, progress.Text, "Closing all tabs clears the percentage");
+        }
+        finally { window.Close(); }
+    }
+
     private static async Task TestWideOutlineNarrowWindow()
     {
         var store = new SettingsStore();

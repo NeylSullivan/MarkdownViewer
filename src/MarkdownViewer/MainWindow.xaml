@@ -76,6 +76,13 @@
     <Border x:Name="WelcomePanel" Background="{DynamicResource WindowBrush}"><StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24" MaxWidth="440"><TextBlock Text="Markdown Viewer" FontSize="27" FontWeight="SemiBold" HorizontalAlignment="Center"/><Button Content="Open files…" Click="Open_Click" Background="{DynamicResource SelectedBrush}" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" Margin="0,20,0,0" Padding="20,9"/><ItemsControl x:Name="WelcomeRecents" Margin="0,20,0,0"><ItemsControl.ItemTemplate><DataTemplate><Button Content="{Binding Name}" ToolTip="{Binding Path}" Tag="{Binding Path}" Click="WelcomeRecent_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></StackPanel></Border>
    </Grid>
   </Grid>
-  <Border Grid.Row="4" Background="{DynamicResource SidebarBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Padding="12,5"><DockPanel><TextBlock x:Name="EncodingText" DockPanel.Dock="Right" Text="UTF-8" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="15,0,0,0"/><TextBlock x:Name="StatusText" Text="Ready" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource MutedBrush}" FontSize="11"/></DockPanel></Border>
+  <Border Grid.Row="4" Background="{DynamicResource SidebarBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Padding="12,5">
+   <DockPanel TextElement.Foreground="{DynamicResource MutedBrush}" TextElement.FontSize="11">
+    <TextBlock x:Name="EncodingText" DockPanel.Dock="Right" Margin="15,0,0,0"/>
+    <TextBlock x:Name="TokenCountText" DockPanel.Dock="Right" Margin="15,0,0,0" ToolTip="Token count for the full Markdown source using o200k_base."/>
+    <TextBlock x:Name="ScrollProgressText" DockPanel.Dock="Right" Margin="15,0,0,0" MinWidth="30" TextAlignment="Right" ToolTip="Scroll position in the document"/>
+    <TextBlock x:Name="StatusText" Text="Ready" TextTrimming="CharacterEllipsis"/>
+   </DockPanel>
+  </Border>
  </Grid>
 </Window>

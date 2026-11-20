@@ -14,12 +14,14 @@ using MarkdownViewer.Rendering;
 using MarkdownViewer.Services;
 using MarkdownViewer.UI;
 using Microsoft.Win32;
+using Microsoft.ML.Tokenizers;
 
 namespace MarkdownViewer;
 
 public partial class MainWindow : Window
 {
     private const double ZoomFontSizeStep = 16 * 0.1;
+    private static readonly Lazy<TiktokenTokenizer> Tokenizer = new(() => TiktokenTokenizer.CreateForEncoding("o200k_base"));
 
     private readonly SettingsStore _store = new();
     private readonly DocumentFileService _files = new();
@@ -30,6 +32,7 @@ public partial class MainWindow : Window
     private readonly CancellationTokenSource _lifetime = new();
     private readonly DispatcherTimer _saveTimer = new() { Interval = TimeSpan.FromMilliseconds(350) };
     private readonly DispatcherTimer _searchTimer = new() { Interval = TimeSpan.FromMilliseconds(180) };
+    private readonly DispatcherTimer _reloadNoticeTimer = new() { Interval = TimeSpan.FromSeconds(6) };
     private readonly Dictionary<string, int> _reloadVersions = new(StringComparer.OrdinalIgnoreCase);
     private readonly AppSettings _settings;
     private readonly SmoothScrollController _smoothScroll;
@@ -63,7 +66,12 @@ public partial class MainWindow : Window
         RefreshRecentFiles();
         _saveTimer.Tick += (_, _) => { _saveTimer.Stop(); SaveSettings(); };
         _searchTimer.Tick += (_, _) => { _searchTimer.Stop(); RunSearch(true); };
-        _watcher.FileChanged += (_, path) => Dispatcher.InvokeAsync(() => _ = ReloadFileAsync(path));
+        _reloadNoticeTimer.Tick += (_, _) =>
+        {
+            if (_active is { } tab) tab.ReloadNotice = null;
+            UpdateStatusPath();
+        };
+        _watcher.FileChanged += (_, path) => Dispatcher.InvokeAsync(() => _ = ReloadDocumentAsync(path, fromWatcher: true));
         SystemEvents.UserPreferenceChanged += SystemPreferenceChanged;
         _ready = true;
         if (_store.LastError is { } error) ShowNotice(error);
@@ -155,7 +163,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task ReloadFileAsync(string path)
+    private Task ReloadFileAsync(string path) => ReloadDocumentAsync(path, fromWatcher: false);
+
+    private async Task ReloadDocumentAsync(string path, bool fromWatcher)
     {
         if (_closing) return;
         var tab = Tabs.FirstOrDefault(item => string.Equals(item.FilePath, path, StringComparison.OrdinalIgnoreCase));
@@ -166,18 +176,28 @@ public partial class MainWindow : Window
         {
             var loaded = await _files.LoadAsync(path, _lifetime.Token);
             if (_closing || !Tabs.Contains(tab) || _reloadVersions.GetValueOrDefault(path) != version) return;
-            if (loaded.Text == tab.Text && tab.Error is null) return;
+            var textChanged = loaded.Text != tab.Text;
+            var needsUpdate = textChanged || loaded.EncodingName != tab.EncodingName || tab.Error is not null;
+            if (fromWatcher && !needsUpdate) return;
+            var time = DateTime.Now.ToString("t");
+            tab.ReloadNotice = fromWatcher ? $"Updated externally at {time}" : $"Refreshed at {time}";
+            if (!needsUpdate)
+            {
+                if (_active == tab) UpdateStatusPath();
+                return;
+            }
             if (_active == tab) { _smoothScroll.Cancel(); RememberPosition(); }
+            if (textChanged) tab.TokenCount = null;
             tab.Text = loaded.Text;
             tab.EncodingName = loaded.EncodingName;
             tab.Rendered = null;
             tab.Error = null;
-            if (_active == tab) { DisplayDocument(tab); StatusText.Text = tab.FilePath + " · Updated"; }
+            if (_active == tab) DisplayDocument(tab);
         }
         catch (OperationCanceledException) { }
         catch (Exception error) when (IsFileError(error))
         {
-            if (!Tabs.Contains(tab)) return;
+            if (_closing || !Tabs.Contains(tab) || _reloadVersions.GetValueOrDefault(path) != version) return;
             tab.Error = "The file is unavailable. Showing the last loaded version. " + error.Message;
             if (_active == tab) ShowNotice(tab.Error);
         }
@@ -192,6 +212,8 @@ public partial class MainWindow : Window
         RememberPosition();
         _searchTimer.Stop();
         _search.Clear();
+        ScrollProgressText.Text = string.Empty;
+        if (_active is { } previous) previous.ReloadNotice = null;
         _active = TabsList.SelectedItem as DocumentTab;
         if (_active is { } tab)
         {
@@ -208,6 +230,7 @@ public partial class MainWindow : Window
             SearchPanel.Visibility = Visibility.Collapsed;
             EmptyOutline.Visibility = Visibility.Collapsed;
             Title = "Markdown Viewer";
+            TokenCountText.Text = "";
             _matches = [];
             UpdateStatus();
         }
@@ -229,12 +252,34 @@ public partial class MainWindow : Window
         OutlineList.ItemsSource = tab.Rendered.Headings.Select(heading => new OutlineEntry(heading)).ToList();
         EmptyOutline.Visibility = tab.Rendered.Headings.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         Title = tab.FileName + " — Markdown Viewer";
+        _ = UpdateTokenCountAsync(tab);
         NoticePanel.Visibility = Visibility.Collapsed;
         if (tab.Error is { } error) ShowNotice(error);
         UpdateReadingWidth();
         UpdateStatus();
         if (SearchPanel.Visibility == Visibility.Visible) RunSearch(false);
         _ = RestoreScrollAsync(tab, displayVersion, savedOffset);
+    }
+
+    private async Task UpdateTokenCountAsync(DocumentTab tab)
+    {
+        var source = tab.Text;
+        var countTask = tab.TokenCount ??= Task.Run(() => Tokenizer.Value.CountTokens(source), _lifetime.Token);
+        if (!countTask.IsCompleted) TokenCountText.Text = "Counting tokens…";
+
+        string label;
+        try
+        {
+            var count = await countTask;
+            label = count == 1 ? "1 token" : $"{count:N0} tokens";
+        }
+        catch (OperationCanceledException) { return; }
+        catch (Exception error) when (error is IOException or InvalidOperationException or System.Text.RegularExpressions.RegexMatchTimeoutException)
+        {
+            label = "Token count unavailable";
+        }
+
+        if (!_closing && _active == tab && tab.TokenCount == countTask) TokenCountText.Text = label;
     }
 
     private async Task RestoreScrollAsync(DocumentTab tab, int displayVersion, double offset)
@@ -250,6 +295,7 @@ public partial class MainWindow : Window
         await Dispatcher.Yield(DispatcherPriority.ContextIdle);
         if (!IsCurrentDisplay()) return;
         _restoringScroll = false;
+        UpdateScrollProgress();
         RememberPosition();
 
         bool IsCurrentDisplay() => !_closing && _active == tab && displayVersion == _displayVersion;
@@ -260,6 +306,7 @@ public partial class MainWindow : Window
         if (!_restoringScroll) return;
         _displayVersion++;
         _restoringScroll = false;
+        UpdateScrollProgress();
     }
 
     private async Task NavigateAsync(DocumentTab source, string link)
@@ -329,9 +376,20 @@ public partial class MainWindow : Window
 
     private void Reader_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
-        if (!_ready || _restoringScroll || e.VerticalChange == 0) return;
+        if (!_ready || _restoringScroll || _active is null) return;
+        UpdateScrollProgress();
+        if (e.VerticalChange == 0) return;
         RememberPosition();
         ScheduleSave();
+    }
+
+    private void UpdateScrollProgress()
+    {
+        var scrollableHeight = Reader.ExtentHeight - Reader.ViewportHeight;
+        var percent = scrollableHeight > 0
+            ? Math.Clamp(100 * Reader.VerticalOffset / scrollableHeight, 0, 100)
+            : 100;
+        ScrollProgressText.Text = $"{percent:0}%";
     }
 
     private void Outline_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -681,7 +739,22 @@ public partial class MainWindow : Window
     private void ShowNotice(string message) { NoticeText.Text = message; NoticePanel.Visibility = Visibility.Visible; }
     private void DismissNotice_Click(object sender, RoutedEventArgs e) => NoticePanel.Visibility = Visibility.Collapsed;
     private void UpdateStatus()
-    { StatusText.Text = _active?.FilePath ?? "Open or drop a Markdown file"; StatusText.ToolTip = _active?.FilePath; EncodingText.Text = _active?.EncodingName ?? ""; }
+    {
+        UpdateStatusPath();
+        EncodingText.Text = _active?.EncodingName ?? "";
+    }
+
+    private void UpdateStatusPath()
+    {
+        _reloadNoticeTimer.Stop();
+        StatusText.ToolTip = _active?.FilePath;
+        if (_active?.ReloadNotice is { } notice)
+        {
+            StatusText.Text = $"{notice} · {_active.FilePath}";
+            _reloadNoticeTimer.Start();
+        }
+        else StatusText.Text = _active?.FilePath ?? "Open or drop a Markdown file";
+    }
 
     private void ScheduleSave()
     { if (!_ready || _closing || _restoringSession) return; _saveTimer.Stop(); _saveTimer.Start(); }
@@ -775,6 +848,7 @@ public partial class MainWindow : Window
         _closing = true;
         _lifetime.Cancel();
         _watcher.Dispose();
+        _reloadNoticeTimer.Stop();
         SystemEvents.UserPreferenceChanged -= SystemPreferenceChanged;
         _saveTimer.Stop();
         _searchTimer.Stop();
