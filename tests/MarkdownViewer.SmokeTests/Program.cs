@@ -430,6 +430,16 @@ internal static partial class Program
             await WaitForScrolling(window);
             Assert(reader.VerticalOffset > lineOffset, "Space advances the document");
 
+            Shortcut(window, Key.PageDown, ModifierKeys.None, reader);
+            Assert(Shortcut(window, Key.End, ModifierKeys.None, reader), "End handled by reader");
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Near(reader.ExtentHeight - reader.ViewportHeight, reader.VerticalOffset, 1, "End jumps to the last page immediately");
+            await WaitForScrolling(window);
+            Near(reader.ExtentHeight - reader.ViewportHeight, reader.VerticalOffset, 1, "Pending page scroll cannot move the reader away from the end");
+            Assert(Shortcut(window, Key.Home, ModifierKeys.None, reader), "Home handled by reader");
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Near(0, reader.VerticalOffset, 1, "Home jumps to the first page immediately");
+
             var beforeCaptionKeys = reader.VerticalOffset;
             foreach (var name in new[] { "MinimizeButton", "MaximizeButton", "CloseWindowButton" })
                 Assert(!Shortcut(window, Key.Space, ModifierKeys.None, (IInputElement)window.FindName(name)), "Space is left to the caption button: " + name);
@@ -439,7 +449,7 @@ internal static partial class Program
             Invoke(window, "ShowSearch");
             var search = (TextBox)window.FindName("SearchBox");
             var before = reader.VerticalOffset;
-            foreach (var key in new[] { Key.Space, Key.Up, Key.Down, Key.PageUp, Key.PageDown })
+            foreach (var key in new[] { Key.Space, Key.Up, Key.Down, Key.PageUp, Key.PageDown, Key.Home, Key.End })
                 Assert(!Shortcut(window, key, ModifierKeys.None, search), key + " is left to the search input");
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             Equal(before, reader.VerticalOffset, "Search field navigation does not move the document");

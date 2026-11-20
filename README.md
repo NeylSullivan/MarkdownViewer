@@ -41,6 +41,7 @@ The **…** menu contains theme and reading-width settings, reload, **Show in Fi
 | Scroll by line | `Up` / `Down` |
 | Scroll by page | `Page Up` / `Page Down` |
 | Scroll down / up one page | `Space` / `Shift+Space` |
+| Jump to the start / end of the document | `Home` / `End` |
 | Zoom in / out | `Ctrl+mouse wheel`, `Ctrl++` / `Ctrl+-` |
 | Reset zoom | `Ctrl+0` |
 | Reload file | `F5` |

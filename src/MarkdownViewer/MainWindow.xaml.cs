@@ -459,7 +459,7 @@ public partial class MainWindow : Window
         var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
             ?? assembly.GetName().Version?.ToString();
         var about = new MenuItem { Header = "About" };
-        about.Click += (_, _) => MessageBox.Show(this, $"Markdown Viewer {version}\n\nC# · WPF · Markdig\nA viewer for local Markdown files.\n\nCtrl+O — open files\nCtrl+F — show/hide search\nCtrl+Tab — next tab\nCtrl+W — close tab\nCtrl+Q — quit\nEsc — close search, then quit\nCtrl+mouse wheel — zoom\nCtrl+Shift+O — toggle outline\nUp / Down — scroll by line\nPage Up / Page Down — scroll by page\nSpace — scroll down one page\nF5 — refresh\n\nSettings: " + _store.FilePath, "About", MessageBoxButton.OK, MessageBoxImage.Information);
+        about.Click += (_, _) => MessageBox.Show(this, $"Markdown Viewer {version}\n\nC# · WPF · Markdig\nA viewer for local Markdown files.\n\nCtrl+O — open files\nCtrl+F — show/hide search\nCtrl+Tab — next tab\nCtrl+W — close tab\nCtrl+Q — quit\nEsc — close search, then quit\nCtrl+mouse wheel — zoom\nCtrl+Shift+O — toggle outline\nUp / Down — scroll by line\nPage Up / Page Down — scroll by page\nSpace — scroll down one page\nHome / End — jump to document start / end\nF5 — refresh\n\nSettings: " + _store.FilePath, "About", MessageBoxButton.OK, MessageBoxImage.Information);
         menu.Items.Add(about);
         ShowMenu(menu, (Button)sender);
     }
@@ -629,6 +629,14 @@ public partial class MainWindow : Window
                 || focusedElement is PasswordBox || OutlineList.IsKeyboardFocusWithin
                 || (focusedElement is ButtonBase button && CaptionButtonsSpace.IsAncestorOf(button))
                 || ReferenceEquals(focusedElement, OutlineList)) return false;
+            if (!shift && key is Key.Home or Key.End)
+            {
+                _smoothScroll.Cancel();
+                CancelPendingScrollRestore();
+                if (key == Key.Home) Reader.ScrollToHome();
+                else Reader.ScrollToEnd();
+                return true;
+            }
             var line = _settings.FontSize * 1.6;
             var page = Math.Max(line, Reader.ViewportHeight - line);
             var distance = key switch
